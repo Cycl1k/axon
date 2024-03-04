@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  python:
+    container_name: appFastAPI
+    build: ./
+    volumes:
+      - ./app:/src/app
+    ports:
+      - ${PY_PORT}:8000
+    restart: always
