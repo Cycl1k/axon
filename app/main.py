@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from dotenv import dotenv_values
+from psycopg2.extras import RealDictCursor
 
 import psycopg2
 import uvicorn
@@ -75,26 +76,30 @@ def searchTask(id: int):
     else:
         return HTTPException(status_code=404, detail='Task with ID ' + str(id) + ' not found')
     
+@app.get('/search_task')
+def searchTasks(body: dict):   
+    nun, values = keysValues (body)
+
+    q = 'SELECT * FROM task_list WHERE ' + values.replace("'",'').replace(",", "").replace('"', "'")
+    
+    return sqlQueryJson(q)
+    
 @app.post('/task_e{id}')
 def editTask(id: int, body: dict):
-
-    # Надо подумать над этим блоком
-    # Данные на изменения принимаются
-    # Но надо решить вопрос с теми данными, необходимо изменить в связи с изменениями первых
-    # Что то бы сдеать с данными, которые лишние в запросе
-
-    q = 'SELECT * FROM task_list WHERE id = ' + str(id)
-    scan = sqlQuery(q)
+    qq = 'SELECT * FROM task_list WHERE id = ' + str(id)
+    scan = sqlQuery(qq)
     if scan != []:
-        print('dsd')
-        if 'status_task' in body:
-            print(1)
-            if body['status_task'] != scan[0][1]: print(scan[0][1])
-            else: print(scan[0]) 
+        if 'status_task' in body and body['status_task'] != scan[0][1]:
+            if body['status_task'] == True: 
+                body.update({'close_at': str(datetime.now())})
+            else: 
+                body.update({'close_at': None})
 
-        q = 'UPDATE task_list SET ' + str(body).replace("': ",'=').replace("{'",'').replace('}','').replace(" '", "") + ' WHERE id=' + str(id)
-        result = sqlQuery(q)
-        return result
+
+        q = 'UPDATE task_list SET ' + str(body).replace("': ",'=').replace("{'",'').replace('}','').replace(" '", "").replace('None', 'null') + ' WHERE id=' + str(id)
+        
+        sqlQuery(q)
+        return sqlQueryJson(qq)[0]
     else:
         return HTTPException(status_code=404, detail='ID not foud')
 
@@ -180,6 +185,33 @@ def sqlQuery(query):
         if sqlConnect:
             sqlConnect.close()
             print("Connection closed")
+
+def sqlQueryJson(query):
+    """
+    Выполняет запрос в базе PostgreSQL и вернет JSON\n
+    Строка запроса должна быть передана на входе, на выходе в случаи:\n
+    - Успеха - результат вывода или "no results to fetch"\n
+    - Ошибки - описание ошибки\n
+    """
+    try:
+        sqlConnect = psycopg2.connect(
+            host = sqlHost,
+            port = sqlPort,
+            user = sqlUser, 
+            password = sqlPass,
+            dbname = sqlDB
+        )
+
+        with sqlConnect.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(query)
+            show = cursor.fetchall()
+            return show
+    except (Exception, psycopg2.Error) as error:
+        print (error)
+        return error
+    finally:
+        if sqlConnect:
+            sqlConnect.close()
 
 if __name__ == '__main__':
 
